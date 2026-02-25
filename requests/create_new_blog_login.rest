@@ -1,0 +1,10 @@
+POST http://localhost:3003/api/blogs
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6Im1sdXVra2FpIiwiaWQiOiI2OTlmMDI4NjAyZTRhNzI3ZTEwYTc5MGMiLCJpYXQiOjE3NzIwMzY0OTZ9.7EcRrEhAZfKqXRsmfAPwtzNeHM81-mKQlW_5ocllM5w
+
+{
+    "title": "hihi",
+    "author": "ion",
+    "url": "www.spp.com",
+    "likes": 8
+}

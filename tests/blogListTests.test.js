@@ -3,15 +3,30 @@ const mongoose = require('mongoose')
 const supertest = require('supertest')
 const app = require('../app')
 const Blog = require('../models/blog')
+const User = require('../models/user')
 const assert = require('node:assert')
 const helper = require('./test_helper')
+const bcrypt = require('bcrypt')
+const jwt = require('jsonwebtoken')
 
 
 const api = supertest(app)
 
+let token
+
 beforeEach(async () => {
   await Blog.deleteMany({})
-  await Blog.insertMany(helper.initialBlogs)
+  await User.deleteMany({})
+
+  const passwordHash = await bcrypt.hash('testpassword', 10)
+  const user = new User({ username: 'testuser', name: 'Test User', passwordHash })
+  await user.save()
+
+  const userForToken = { username: user.username, id: user._id }
+  token = jwt.sign(userForToken, process.env.SECRET)
+
+  const blogsWithUser = helper.initialBlogs.map(blog => ({ ...blog, user: user._id }))
+  await Blog.insertMany(blogsWithUser)
 })
 
 test('all blogs are returned', async () => {
@@ -38,6 +53,7 @@ test('adding a blog', async () => {
 
   await api
     .post('/api/blogs')
+    .set('Authorization', `Bearer ${token}`)
     .send(newBlog)
     .expect(201)
     .expect('Content-Type', /application\/json/)
@@ -59,6 +75,7 @@ test('likes by default is 0', async () => {
 
   await api
     .post('/api/blogs')
+    .set('Authorization', `Bearer ${token}`)
     .send(newBlog)
     .expect(201)
     .expect('Content-Type', /application\/json/)
@@ -82,6 +99,7 @@ test('title is missing', async () => {
 
   await api
     .post('/api/blogs')
+    .set('Authorization', `Bearer ${token}`)
     .send(newBlog)
     .expect(400)
 
@@ -99,6 +117,7 @@ test('url is missing', async () => {
 
   await api
     .post('/api/blogs')
+    .set('Authorization', `Bearer ${token}`)
     .send(newBlog)
     .expect(400)
 
@@ -111,7 +130,7 @@ test('deletion of a blog', async () => {
   const blogsAtStart = await helper.blogsInDb()
   const blogToDelete = blogsAtStart[0]
 
-  await api.delete(`/api/blogs/${blogToDelete.id}`).expect(204)
+  await api.delete(`/api/blogs/${blogToDelete.id}`).set('Authorization', `Bearer ${token}`).expect(204)
 
   const blogsAtEnd = await helper.blogsInDb()
 
@@ -124,7 +143,7 @@ test('deletion of a blog', async () => {
 test('delete fails with statuscode 400 id is invalid', async () => {
   const invalidId = '5a3d5da59070081a82a3445'
 
-  await api.delete(`/api/blogs/${invalidId}`).expect(400)
+  await api.delete(`/api/blogs/${invalidId}`).set('Authorization', `Bearer ${token}`).expect(400)
 })
 
 test('update a blog', async () => {
@@ -181,6 +200,23 @@ test('update fails with statuscode 400 id is invalid', async () => {
     .put(`/api/blogs/${invalidId}`)
     .send(updatedBlog)
     .expect(400)
+})
+
+test('adding a blog fails with 401 if token is not provided', async () => {
+  const newBlog = {
+    title: "Canonical string reduction",
+    author: "Edsger W. Dijkstra",
+    url: "http://www.cs.utexas.edu/~EWD/transcriptions/EWD08xx/EWD808.html",
+    likes: 12,
+  }
+
+  await api
+    .post('/api/blogs')
+    .send(newBlog)
+    .expect(401)
+
+  const blogsAtEnd = await helper.blogsInDb()
+  assert.strictEqual(blogsAtEnd.length, helper.initialBlogs.length)
 })
 
 after(async () => {
